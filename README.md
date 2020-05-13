@@ -12,6 +12,8 @@ Update the OS, with Python, Selenium and Chrome using:
 
 `./ubuntu-update.sh`
 
+Configure the environment in `envvars.sh`
+
 Generate load using the command:
 
 `python3 jira1.py test1 10 1`
