@@ -9,10 +9,19 @@ import random
 import time
 import string
 import sys
+import os
 
 # Maintainer: David Ryder, david.ryder@appdynamics.com
 
-chromeDriverExe = "/usr/local/bin/chromedriver"
+
+
+def getEnvironmentConfig():
+    return { "chromeDriverExe": os.environ.get('CHROME_DRIVER_EXE', '/usr/local/bin/chromedriver'),
+             "chromeHeadLess": os.environ.get('CHROME_HEADLESS').lower() == "true",
+             "jiraHost": os.environ.get('JIRA_HOST', 'REQUIRED'),
+             "jiraPort": os.environ.get('JIRA_PORT', 'REQUIRED'),
+             "jiraProtocol": os.environ.get('JIRA_PROTOCOL', 'http'),
+             "jiraPassword": os.environ.get('JIRA_PASSWORD', "REQUIRED") }
 
 def randomString(stringLength=8):
     letters = string.ascii_lowercase
@@ -32,33 +41,47 @@ class Jira():
         self.config["user"] = "REQUIRED"
         self.config["password"] = "REQUIRED"
         self.options = Options()
-        #self.options.add_argument("--window-size=640,320")
-        self.options.add_argument('--headless')
-        print( "Loading webkit and selenium")
-        self.driver = webdriver.Chrome(options=self.options, executable_path=chromeDriverExe)
 
-    def configure(self, user, password):
-            self.config["user"] = user
-            self.config["password"] = password
 
-    def login(self):
-        self.driver.get( "http://jiralinuxtrialprep-jira-tynu5ggq.appd-sales.com:8080/login.jsp" )
+    def configure(self, config):
+            self.config["user"] = config["jiraPassword"]
+            self.config["password"] = ""
+            self.config["jiraHost"] = config["jiraHost"]
+            self.config["jiraPort"] = config["jiraPort"]
+            self.config["jiraProtocol"] = config["jiraProtocol"]
+            self.config["chromeDriverExe"] = config["chromeDriverExe"]
+            self.config["chromeHeadLess"] = config["chromeHeadLess"]
+
+    def startChrome(self):
+        chromeOptions = Options()
+        chromeOptions.add_argument("--window-size=640,320")
+        if self.config["chromeHeadLess"]:
+            chromeOptions.add_argument('--headless')
+        print( "Loading Chrome webkit")
+        self.driver = webdriver.Chrome(options=chromeOptions, executable_path=self.config["chromeDriverExe"] )
+
+    def getURL(self, service):
+        return "{protocol}://{host}:{port}/{service}".format(protocol=self.config["jiraProtocol"],
+                host=self.config["jiraHost"], port=self.config["jiraPort"], service=service)
+
+    def login(self, user, password):
+        self.driver.get( self.getURL("login.jsp") )
         id1 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "login-form-username")))
         id2 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "login-form-password")))
         id3 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "login-form-submit")))
-        id1.send_keys(self.config["user"] )
-        id2.send_keys(self.config["password"])
+        id1.send_keys(user)
+        id2.send_keys(password)
         id3.click()
         time.sleep(1)
         print( "Title: ", self.driver.title )
 
     def logout(self):
-        self.driver.get( "http://jiralinuxtrialprep-jira-tynu5ggq.appd-sales.com:8080/logout" )
+        self.driver.get( self.getURL("logout" ) )
         id4 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "confirm-logout-submit")))
         id4.click()
 
     def issuesSearch(self):
-        self.driver.get( "http://jiralinuxtrialprep-jira-tynu5ggq.appd-sales.com:8080/browse" )
+        self.driver.get( self.getURL("browse" ) )
         id1 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "quickSearchInput" )))
         s1 = "APPD-"+str(random.randint(1,20000))
         print( "Searching for ", s1 )
@@ -66,12 +89,12 @@ class Jira():
         id1.send_keys(u'\ue007') # Enter
 
     def issuesSearchLatest(self):
-        self.driver.get( "http://jiralinuxtrialprep-jira-tynu5ggq.appd-sales.com:8080/browse" )
+        self.driver.get( self.getURL("browse" ) )
         id1 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "quickSearchInput" )))
         id1.send_keys(u'\ue007') # Enter
 
     def issuesCreate(self):
-        self.driver.get("http://jiralinuxtrialprep-jira-tynu5ggq.appd-sales.com:8080//secure/CreateIssue!default.jspa")
+        self.driver.get( self.getURL("CreateIssue!default.jspa" ) )
         id1 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "summary" )))
         id1.send_keys("Summary_{}".format(randomSentence()))
         id2 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "duedate" )))
@@ -107,6 +130,8 @@ usersWeights = [ 1 ,    1,    1,    1,    1,    5,  1 ]
 commands = ["search", "comment", "create", "done" ]
 commandsWeights =  [1,1,1,5]
 
+config = getEnvironmentConfig()
+
 nArgs = len(sys.argv)
 if nArgs > 1:
     cmd = sys.argv[1]
@@ -120,14 +145,15 @@ if nArgs > 1:
             delaySec = 0
 
         j = Jira()
+        j.configure(config)
+        j.startChrome()
         for i in range(0, iterations):
             user = random.choices(population=users, weights=usersWeights)[0]
-            password = "welcome1"
+            password = config["jiraPassword"]
             jiraCmd = random.choices(population=commands, weights=commandsWeights)[0]
             print( "Iteration {} {} [{}]".format(i, user, jiraCmd))
             try:
-                j.configure(user, password)
-                j.login()
+                j.login(user, password)
                 if jiraCmd == 'search':
                     j.issuesSearch()
                 elif jiraCmd == 'comment':
