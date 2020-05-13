@@ -2,7 +2,15 @@
 
 Generate load for JIRA, performs: create, search, add comment, done operations across a range of users
 
-Requires chrome and chromedriver installed
+Requires Chrome and Chromedriver installed
+
+Clone this repository:
+
+`git clone https://github.com/Appdynamics/AppD-Jira-LoadGen.git`
+
+Update the OS, with Python, Selenium and Chrome using:
+
+`./ubuntu-update.sh`
 
 Generate load using the command:
 
