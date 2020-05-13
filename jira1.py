@@ -54,7 +54,7 @@ class Jira():
 
     def startChrome(self):
         chromeOptions = Options()
-        chromeOptions.add_argument("--window-size=640,320")
+        #chromeOptions.add_argument("--window-size=640,320")
         if self.config["chromeHeadLess"]:
             chromeOptions.add_argument('--headless')
         print( "Loading Chrome webkit")
@@ -157,7 +157,7 @@ if nArgs > 1:
                 if jiraCmd == 'search':
                     j.issuesSearch()
                 elif jiraCmd == 'comment':
-                    j.issuesSearchLatest()
+                    j.issuesSearch()
                     j.issuesComment()
                 elif jiraCmd == 'create':
                     j.issuesCreate()
