@@ -238,7 +238,7 @@ class JiraAPI():
         self.config = config
 
     def configBasicAuth(self, userList):
-        self.jiraAccess = [ JIRA(options={'server': JIRA_SERVER}, basic_auth=user) for user in userList ]
+        self.jiraAccess = [ JIRA(options={'server': self.config['JIRA_SERVER']}, basic_auth=user) for user in userList ]
 
     def configOAuth(self):
         oauth_token = self.config['JIRA_OAUTH_TOKEN']
