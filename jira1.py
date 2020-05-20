@@ -32,7 +32,7 @@ def randomID(stringLength=3):
     return ''.join(random.choice(letters) for i in range(stringLength))
 
 def randomSentence(words=6, wordLength=8):
-    return ' '.join(randomString() for i in range(words))
+    return ' '.join(randomString(wordLength) for i in range(words))
 
 class Jira():
     config = { "user": "", "password": "" }
@@ -44,8 +44,8 @@ class Jira():
 
 
     def configure(self, config):
-            self.config["user"] = config["jiraPassword"]
-            self.config["password"] = ""
+            self.config["user"] = "REQUIRED"
+            self.config["password"] = "REQUIRED"
             self.config["jiraHost"] = config["jiraHost"]
             self.config["jiraPort"] = config["jiraPort"]
             self.config["jiraProtocol"] = config["jiraProtocol"]
@@ -65,6 +65,7 @@ class Jira():
                 host=self.config["jiraHost"], port=self.config["jiraPort"], service=service)
 
     def login(self, user, password):
+        print( "Login ", user, password )
         self.driver.get( self.getURL("login.jsp") )
         id1 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "login-form-username")))
         id2 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "login-form-password")))
@@ -76,24 +77,26 @@ class Jira():
         print( "Title: ", self.driver.title )
 
     def logout(self):
+        print( "Logout " )
         self.driver.get( self.getURL("logout" ) )
         id4 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "confirm-logout-submit")))
         id4.click()
 
-    def issuesSearch(self):
+    def issuesSearch(self, searchText):
+        print( "Searching for ", searchText )
         self.driver.get( self.getURL("browse" ) )
         id1 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "quickSearchInput" )))
-        s1 = "APPD-"+str(random.randint(1,20000))
-        print( "Searching for ", s1 )
-        id1.send_keys(s1)
+        id1.send_keys(searchText)
         id1.send_keys(u'\ue007') # Enter
 
     def issuesSearchLatest(self):
         self.driver.get( self.getURL("browse" ) )
         id1 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "quickSearchInput" )))
         id1.send_keys(u'\ue007') # Enter
+        id2 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "activitymodule_heading" )))
 
     def issuesCreate(self):
+        print( "Create Issue")
         self.driver.get( self.getURL("CreateIssue!default.jspa" ) )
         id1 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "summary" )))
         id1.send_keys("Summary_{}".format(randomSentence()))
@@ -103,23 +106,27 @@ class Jira():
         id3.click()
 
     def issuesComment(self):
+        commentStr = "Comment {}".format(randomSentence())
+        print( "Issue Comment ", commentStr)
         id1 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "footer-comment-button" )))
         id1.click()
 
         if1 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "iframe" )))
         self.driver.switch_to.frame(if1)
 
-        #id2 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "comment-wiki-edit" ))) # "tinymce"
-        id3 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "tinymce" ))) # "tinymce"
-        s1 = "Comment from {} - {}".format(self.config["user"],randomSentence())
-        print( s1)
-        id3.send_keys(s1)
+        id3 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "tinymce" )))
+        id3.send_keys(commentStr)
 
         self.driver.switch_to.default_content()
         id4 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "issue-comment-add-submit" )))
         id4.click()
 
+    def systemDashboard(self):
+        self.driver.get( self.getURL("/secure/Dashboard.jspa") )
+        id1 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "dashboard" )))
+
     def issuesDone(self):
+        print( "Issue Done" )
         id1 = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, "action_id_21" )))
         id1.click()
 
@@ -135,8 +142,30 @@ config = getEnvironmentConfig()
 nArgs = len(sys.argv)
 if nArgs > 1:
     cmd = sys.argv[1]
+    if cmd == "add-comments":
+        if nArgs > 3:
+            iterations = int( sys.argv[2] )
+            delaySec = int( sys.argv[3] )
+        else:
+            iterations = 1
+            delaySec = 0
+        searchText1 = "APPD-834"
+        j = Jira()
+        j.configure(config)
+        j.startChrome()
+        j.login("dryder", config["jiraPassword"])
+        j.issuesSearch(searchText1)
+        for i in range(1,iterations):
+            print( "Adding ", i)
+            #j.systemDashboard()
+            ##time.sleep(delaySec)
+            #j.issuesSearch(searchText1)
+            #time.sleep(delaySec)
+            j.issuesComment()
+            time.sleep(delaySec)
+        j.logout()
 
-    if cmd == "test1":
+    elif cmd == "test1":
         if nArgs > 3:
             iterations = int( sys.argv[2] )
             delaySec = int( sys.argv[3] )
@@ -151,18 +180,20 @@ if nArgs > 1:
             user = random.choices(population=users, weights=usersWeights)[0]
             password = config["jiraPassword"]
             jiraCmd = random.choices(population=commands, weights=commandsWeights)[0]
-            print( "Iteration {} {} [{}]".format(i, user, jiraCmd))
+            searchText1 = "APPD-"+str(random.randint(500, 2000))
+            searchText2 = "APPD-"+str(random.randint(1, 500))
+            print( "Iteration {} {} [{}] {} {}".format(i, user, jiraCmd, searchText1, searchText2))
             try:
                 j.login(user, password)
                 if jiraCmd == 'search':
-                    j.issuesSearch()
+                    j.issuesSearch(searchText1)
                 elif jiraCmd == 'comment':
-                    j.issuesSearch()
+                    j.issuesSearch(searchText1)
                     j.issuesComment()
                 elif jiraCmd == 'create':
                     j.issuesCreate()
                 elif jiraCmd == 'done':
-                    j.issuesSearch()
+                    j.issuesSearch(searchText2)
                     j.issuesDone()
                 else:
                     print( "unknown command ", jiraCmd)
