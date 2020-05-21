@@ -26,6 +26,9 @@ import os
 
 def getEnvironmentConfig():
     return { "JIRA_SERVER": os.environ.get('JIRA_SERVER', 'http://localhost:8080'),
+             "JIRA_REQUEST_TOKEN_URL": os.environ.get('JIRA_REQUEST_TOKEN_URL', '/plugins/servlet/oauth/request-token'),
+             "JIRA_AUTHORIZE_URL": os.environ.get('JIRA_AUTHORIZE_URL', '/plugins/servlet/oauth/authorize'),
+             "JIRA_ACCESS_TOKEN_URL": os.environ.get('JIRA_ACCESS_TOKEN_URL', '/plugins/servlet/oauth/access-token'),
              "JIRA_PRIVATE_PEM_FILE": os.environ.get('JIRA_PRIVATE_PEM_FILE', 'jira_privatekey.pem'),
              "JIRA_CONSUMER_KEY": os.environ.get('JIRA_CONSUMER_KEY', 'OauthKey'),
              "JIRA_CONSUMER_SECRET": os.environ.get('JIRA_CONSUMER_SECRET', 'ANYTHING'),
@@ -48,72 +51,67 @@ def randomWord(wordLength=8):
 def randomSentence(wordLength=8, words=6):
     return ' '.join(randomWord(wordLength) for i in range(words))
 
+class JiraOAuth():
+    config = { }
 
-def read(file_path):
-    """ Read a file and return it's contents. """
-    with open(file_path) as f:
-        return f.read()
+    def __init__(self, config):
+        self.config = config
 
-def jiraCreateAccessToken():
-    # The Consumer Key created while setting up the "Incoming Authentication" in
-    # JIRA for the Application Link.
-    CONSUMER_KEY = 'OauthKey'
-    CONSUMER_SECRET = 'dont_care'
-    VERIFIER = 'jira_verifier'
+    def createRequestToken(self):
+        # The Consumer Key created while setting up the "Incoming Authentication" in
+        # JIRA for the Application Link.
+        self.CONSUMER_KEY = self.config['JIRA_CONSUMER_KEY']
+        self.CONSUMER_SECRET = self.config['JIRA_CONSUMER_SECRET']
+        self.VERIFIER = self.config['JIRA_VERIFIER']
+        self.JIRA_SERVER = self.config['JIRA_SERVER']
+        self.RSA_KEY = readFile(self.config['JIRA_PRIVATE_PEM_FILE'])
+        self.REQUEST_TOKEN_URL = self.JIRA_SERVER + self.config['JIRA_REQUEST_TOKEN_URL']
+        self.AUTHORIZE_URL = self.JIRA_SERVER + self.config['JIRA_AUTHORIZE_URL']
+        self.ACCESS_TOKEN_URL = self.JIRA_SERVER + self.config['JIRA_ACCESS_TOKEN_URL']
 
-    # The contents of the rsa.pem file generated (the private RSA key)
-    RSA_KEY = readFile('jira_privatekey.pem')
+        # Request Token
+        oauth = OAuth1Session(self.CONSUMER_KEY, client_secret=self.CONSUMER_SECRET,
+                              signature_method=SIGNATURE_RSA, rsa_key=self.RSA_KEY)
+        self.request_token = oauth.fetch_request_token(self.REQUEST_TOKEN_URL)
+        self.resource_owner_key = self.request_token['oauth_token'];
+        self.resource_owner_secret = self.request_token['oauth_token_secret'];
 
-    # The URLs for the JIRA instance
-    REQUEST_TOKEN_URL = JIRA_SERVER + '/plugins/servlet/oauth/request-token'
-    AUTHORIZE_URL = JIRA_SERVER + '/plugins/servlet/oauth/authorize'
-    ACCESS_TOKEN_URL = JIRA_SERVER + '/plugins/servlet/oauth/access-token'
+        print("Request Token:")
+        print("  oauth_token={}".format(self.resource_owner_key))
+        print("  oauth_token_secret={}".format(self.resource_owner_secret))
+        print("\n")
 
-    # Step 1: Get a request token
-    oauth = OAuth1Session(CONSUMER_KEY, client_secret= CONSUMER_SECRET, signature_method=SIGNATURE_RSA, rsa_key=RSA_KEY)
-    request_token = oauth.fetch_request_token(REQUEST_TOKEN_URL)
+    def authorizeToken(self):
+        print("Visit to the following URL to provide authorization:")
+        print("  {}?oauth_token={}".format(self.AUTHORIZE_URL, self.request_token['oauth_token']))
+        print("\n")
+        input("Press any key to continue...")
+        oauth = OAuth1Session(self.CONSUMER_KEY, client_secret=self.CONSUMER_SECRET,
+                                resource_owner_key=self.resource_owner_key,
+                                resource_owner_secret=self.resource_owner_secret,
+                                verifier=self.VERIFIER,
+                                signature_method=SIGNATURE_RSA, rsa_key=self.RSA_KEY)
+        self.access_token = oauth.fetch_access_token(self.ACCESS_TOKEN_URL)
 
-    resource_owner_key = request_token['oauth_token'];
-    resource_owner_secret = request_token['oauth_token_secret'];
+    def getToken(self):
+        return self.access_token
 
-    print("STEP 1: GET REQUEST TOKEN")
-    print("  oauth_token={}".format(resource_owner_key))
-    print("  oauth_token_secret={}".format(resource_owner_secret))
-    print("\n")
+    def printToken(self):
+        print("Configure OAUTH Environment Variables (envvars.sh):")
+        print("export JIRA_OAUTH_TOKEN={}".format(self.access_token['oauth_token']))
+        print("export JIRA_OAUTH_TOKEN_SECRET={}".format(self.access_token['oauth_token_secret']))
+        print("\n")
 
-    # Step 2: Get the end-user's authorization
-    print("STEP2: AUTHORIZATION")
-    print("  Visit to the following URL to provide authorization:")
-    print("  {}?oauth_token={}".format(AUTHORIZE_URL, request_token['oauth_token']))
-    print("\n")
-
-    input("Press any key to continue...")
-
-    oauth = OAuth1Session(CONSUMER_KEY, client_secret= CONSUMER_SECRET,
-                            resource_owner_key=resource_owner_key,
-                            resource_owner_secret=resource_owner_secret,
-                            verifier=VERIFIER,
-                            signature_method=SIGNATURE_RSA, rsa_key=RSA_KEY)
-
-    # Step 3: Get the access token
-    access_token = oauth.fetch_access_token(ACCESS_TOKEN_URL)
-
-    print("STEP2: GET ACCESS TOKEN")
-    print("  oauth_token={}".format(access_token['oauth_token']))
-    print("  oauth_token_secret={}".format(access_token['oauth_token_secret']))
-    print("\n")
-
-    # Now you can use the access tokens with the JIRA client. Hooray!
-    jira = JIRA(options={'server': JIRA_SERVER}, oauth={
-        'access_token': access_token['oauth_token'],
-        'access_token_secret': access_token['oauth_token_secret'],
-        'consumer_key': CONSUMER_KEY,
-        'key_cert': RSA_KEY
-    })
-
-    # Test the Access
-    for project in jira.projects():
-        print(project.key)
+    def testAccess(self):
+        print( "Test Access")
+        jira = JIRA(options={'server': self.JIRA_SERVER}, oauth={
+            'access_token': self.access_token['oauth_token'],
+            'access_token_secret': self.access_token['oauth_token_secret'],
+            'consumer_key': self.CONSUMER_KEY,
+            'key_cert': self.RSA_KEY
+        })
+        for project in jira.projects():
+            print(project.key)
 
 
 class JiraUI():
@@ -296,7 +294,7 @@ def getArgs1():
         delaySec = 0
     return iterations, delaySec
 
-config = getEnvironmentConfig()
+jiraConfig = getEnvironmentConfig()
 
 userListBasic = [ ("u1", "welcome1"), ("dryder", "welcome1") ]
 
@@ -307,24 +305,28 @@ if nArgs > 1:
 
 if cmd == "load-api-basic":
     iterations, delaySec = getArgs1()
-    j = JiraAPI(config)
+    j = JiraAPI(jiraConfig)
     j.configBasicAuth( userListBasic )
     j.run(iterations, delaySec)
 
 elif cmd == "load-api-oauth":
     iterations, delaySec = getArgs1()
-    j = JiraAPI(config)
+    j = JiraAPI(jiraConfig)
     j.configOAuth()
     j.run(iterations, delaySec)
 
 elif cmd == "load-ui":
     iterations, delaySec = getArgs1()
-    j = JiraUI(config)
+    j = JiraUI(jiraConfig)
     j.configBasicAuth( userListBasic )
     j.run(iterations, delaySec)
 
 elif cmd == "jira-create-token":
-    jiraCreateAccessToken()
+    j = JiraOAuth(jiraConfig)
+    j.createRequestToken()
+    j.authorizeToken()
+    j.printToken()
+    j.testAccess()
 
 elif cmd == "test-config":
     config = getEnvironmentConfig()
