@@ -244,7 +244,7 @@ class JiraAPI():
         oauth_token = self.config['JIRA_OAUTH_TOKEN']
         oauth_token_secret = self.config['JIRA_OAUTH_TOKEN_SECRET']
         CONSUMER_KEY = self.config['JIRA_CONSUMER_KEY']
-        RSA_KEY = read(self.config['JIRA_PRIVATE_PEM_FILE'])
+        RSA_KEY = readFile(self.config['JIRA_PRIVATE_PEM_FILE'])
         JIRA_SERVER = self.config['JIRA_SERVER']
         self.jiraAccess = [ JIRA(options={'server': JIRA_SERVER}, oauth={
             'access_token': oauth_token,
@@ -261,7 +261,7 @@ class JiraAPI():
 
     def run(self, iterations, delaySec):
         loadCommands = [("search",100), ("comment",1), ("create",100), ("done",1),
-                        ("projects",100), ("searchUsers",100), ("jqlToDo",100) ]
+                        ("projects",100), ("searchUsers",100), ("jqlToDo",200) ]
         loadPopulation = [i[0] for i in loadCommands]
         loadWeights = [i[1] for i in loadCommands]
         for i in range(0, iterations):
