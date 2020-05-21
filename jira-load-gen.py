@@ -15,6 +15,8 @@ import string
 import sys
 import os
 
+# Maintainer: David Ryder, david.ryder@appdynamics.com
+
 # Jira Docs
 # https://jira.readthedocs.io/en/master/api.html
 
